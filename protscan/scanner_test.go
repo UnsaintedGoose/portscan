@@ -16,8 +16,10 @@ func TestScanner_Basic(t *testing.T) {
 	defer ln.Close()
 
 	addr := ln.Addr().(*net.TCPAddr)
-	openPort := uint16(addr.Port)
-	closedPort := uint16(1) // Порт 1 обычно закрыт
+	
+	// net.TCPAddr.Port уже имеет тип int, что идеально подходит для нашего API
+	openPort := addr.Port 
+	closedPort := 1 // Порт 1 обычно закрыт, тип int
 
 	scanner, err := New(
 		WithConcurrency(10),
@@ -28,6 +30,8 @@ func TestScanner_Basic(t *testing.T) {
 	}
 
 	ctx := context.Background()
+	
+	// Передаем int в List
 	results, err := scanner.Scan(ctx, []string{"127.0.0.1"}, List(openPort, closedPort))
 	if err != nil {
 		t.Fatal(err)
@@ -36,10 +40,11 @@ func TestScanner_Basic(t *testing.T) {
 	foundOpen, foundClosed := false, false
 
 	for res := range results {
-		if res.Port == openPort && res.State == StateOpen {
+		// res.Port имеет тип uint16, поэтому приводим openPort/closedPort для сравнения
+		if res.Port == uint16(openPort) && res.State == StateOpen {
 			foundOpen = true
 		}
-		if res.Port == closedPort && res.State == StateClosed {
+		if res.Port == uint16(closedPort) && res.State == StateClosed {
 			foundClosed = true
 		}
 	}
@@ -56,6 +61,7 @@ func TestScanner_ContextCancellation(t *testing.T) {
 	scanner, _ := New(WithConnectTimeout(time.Second))
 	ctx, cancel := context.WithCancel(context.Background())
 
+	// Range теперь принимает int
 	results, err := scanner.Scan(ctx, []string{"127.0.0.1"}, Range(1, 1000))
 	if err != nil {
 		t.Fatal(err)
@@ -99,8 +105,25 @@ func TestScanner_InvalidInputs(t *testing.T) {
 	}
 	
 	// Невалидный порт (>65535)
+	// Теперь это компилируется, так как List принимает int
 	_, err = scanner.Scan(ctx, []string{"127.0.0.1"}, List(70000))
 	if err == nil {
 		t.Error("expected error for port > 65535")
+	}
+
+	// Отрицательный порт
+	_, err = scanner.Scan(ctx, []string{"127.0.0.1"}, List(-5))
+	if err == nil {
+		t.Error("expected error for negative port")
+	}
+	
+	// Проверка обратного диапазона (должен автоматически инвертироваться в 1-100)
+	ports := Range(100, 1)
+	validPorts, err := ports.Validate()
+	if err != nil {
+		t.Errorf("unexpected error for reversed range: %v", err)
+	}
+	if len(validPorts) != 100 || validPorts[0] != 1 || validPorts[99] != 100 {
+		t.Error("reversed range was not handled correctly")
 	}
 }

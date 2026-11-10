@@ -12,4 +12,4 @@
 
 ## Установка
 ```bash
-go get github.com/yourusername/portscan
+go get github.com/UnsaintedGoose/portscan

@@ -8,10 +8,13 @@ var (
 )
 
 // Ports представляет собой набор портов для сканирования.
-type Ports []uint16
+// Мы используем int вместо uint16, чтобы позволить пользователю передать 
+// заведомо невалидные значения (например, 70000 или -1) и получить 
+// структурированную ошибку валидации, а не ошибку компиляции.
+type Ports []int
 
-// Range создает диапазон портов. Если start > end, они меняются местами.
-func Range(start, end uint16) Ports {
+// Range создает диапазон портов. Если start > end, они автоматически меняются местами.
+func Range(start, end int) Ports {
 	if start > end {
 		start, end = end, start
 	}
@@ -23,30 +26,30 @@ func Range(start, end uint16) Ports {
 }
 
 // List создает набор портов из списка.
-func List(ports ...uint16) Ports {
+func List(ports ...int) Ports {
 	return Ports(ports)
 }
 
-// Validate проверяет порты на валидность, удаляет дубликаты и возвращает чистый срез.
-// Поведение для граничных случаев:
-// - Порт 0 или > 65535: возвращается ошибка ErrInvalidPort.
-// - Дубликаты: автоматически удаляются.
-// - Пустой список: возвращается ошибка ErrEmptyPorts.
+// Validate проверяет порты на валидность, удаляет дубликаты и возвращает 
+// безопасный срез uint16 для внутреннего использования в сканере.
 func (p Ports) Validate() ([]uint16, error) {
 	if len(p) == 0 {
 		return nil, ErrEmptyPorts
 	}
 
-	seen := make(map[uint16]struct{}, len(p))
+	seen := make(map[int]struct{}, len(p))
 	var res []uint16
 
 	for _, port := range p {
-		if port == 0 || port > 65535 {
+		// Валидация граничных случаев: порт должен быть строго от 1 до 65535
+		if port <= 0 || port > 65535 {
 			return nil, ErrInvalidPort
 		}
+		
+		// Удаление дубликатов
 		if _, ok := seen[port]; !ok {
 			seen[port] = struct{}{}
-			res = append(res, port)
+			res = append(res, uint16(port)) // Безопасное преобразование после валидации
 		}
 	}
 
